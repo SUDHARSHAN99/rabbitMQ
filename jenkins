@@ -1,11 +1,11 @@
 pipeline {
-  agent { label 'master' } 
+  agent { label 'master' }
   environment {
-    JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-11.0.7.10-4.el7_8.x86_64'
+    JAVA_HOME = '/usr/lib/jvm/java-1.8.0-openjdk'
   }
   triggers {
     pollSCM('') // Enabling being build on Push
-  } 
+  }
   options {
     buildDiscarder(
       logRotator(
@@ -17,47 +17,17 @@ pipeline {
         artifactNumToKeepStr: '3'
         )
     )
-    office365ConnectorWebhooks([[
-      name: "notifications",
-      startNotification: true,
-      notifyFailure: true,
-      notifySuccess: true,
-      url: ''
-            ]]
-      )
-  }  
+  }
   stages {
     stage('Static Analysis') {
       steps {
-        sh './gradlew pmdMain pmdTest spotlessCheck'
+        withSonarQubeEnv('SonarQubeDeploy') {
+           sh 'cd decison-engine;mvn clean install -P test -Dmaven.test.skip=true; '
+        }
       }
     }
-    stage('Test') {
-      steps {
-        sh './gradlew test jacocoTestReport'
-      }
-    }
-    stage('Build') {
-      steps {
-        sh './gradlew assemble'
-      }
-    }
-    stage('Build Docker Image') {
-      steps {
-        sh './gradlew docker saveDockerImage -x test -x pmdTest -x pmdMain'
-      }
-    }    
-  }
-  post {
-    always {
-      archiveArtifacts(artifacts: 'build/libs/**/*.jar', fingerprint: true)
-      archiveArtifacts(artifacts: 'build/*.tar.gz', fingerprint: true)
-      junit 'build/test-results/**/*.xml'
-      step([$class: 'PmdPublisher', pattern: '**/build/reports/pmd/*.xml', unstableTotalAll:'0'])
-      step([$class: 'JacocoPublisher', pattern: '**/build/reports/jacoco/**/*.xml'])
-    }
-    failure {
-      office365ConnectorSend webhookUrl: ""
-    }    
   }
 }
+
+
+
